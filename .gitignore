@@ -26,3 +26,13 @@
 *.exe
 *.out
 *.app
+
+# Python
+*.pyc
+setup.cfg
+
+# Eclipse
+.settings
+.cproject
+.project
+.pydevproject
