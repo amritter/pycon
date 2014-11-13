@@ -99,9 +99,28 @@ siddon_vertices(npy_double lstart, npy_double lpitch, size_t size)
 }
 
 bool
-within_bounds(const npy_double c, const npy_double start, const npy_double end)
+point_within_bounds(const npy_double c, const npy_double start,
+    const npy_double end)
 {
   return (start <= c && c < end);
+}
+
+bool
+within_bounds(const npy_double c, const npy_double s, const npy_double xi,
+    const npy_double start0, const npy_double end0, const npy_double start1,
+    const npy_double end1)
+{
+  const npy_double cinv = 1. / c;
+  const npy_double sinv = 1. / s;
+  const npy_double p0start = (xi - start1 * s) * cinv;
+  const npy_double p0end = (xi - end1 * s) * cinv;
+  const npy_double p1start = (xi - start0 * s) * sinv;
+  const npy_double p1end = (xi - end0 * s) * sinv;
+  return (point_within_bounds(p0start, start0, end0)
+      || point_within_bounds(p0end, start0, end0)
+      || point_within_bounds(p1start, start1, end1)
+      || point_within_bounds(p1end, start1, end1));
+
 }
 
 ray_type
@@ -118,9 +137,9 @@ siddon2d(npy_double theta, npy_double xi, size_t n0, size_t n1,
   const npy_double start0 = -.5 * width0 + center0;
   const npy_double start1 = -.5 * width1 + center1;
 
-  if (!within_bounds(xi * c, start0, start0 + width0)
-      || !within_bounds(xi * s, start1, start1 + width1))
+  if (!within_bounds(c, s, xi, start0, start0 + width0, start1, start1+width1))
     {
+      //std::cerr << "Not within" << xi*c << " " << xi*s << std::endl;
       return ray;
     }
 
@@ -357,7 +376,7 @@ template<ray_func_ptr ray_func>
     const auto ray_up_end = ray_up.end();
     for (auto v_it = ray_up.begin(); v_it != ray_up_end; ++v_it)
       {
-        if ( std::abs(v_it->weight) <= weight_limit )
+        if (std::abs(v_it->weight) <= weight_limit)
           {
             ray_up.erase(v_it);
           }
