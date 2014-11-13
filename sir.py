@@ -11,21 +11,21 @@ import matplotlib.pyplot as pl
 import scipy.optimize as opt
 import time
 
-n0_default = 10
-n1_default = 10
+n0_default = 16
+n1_default = 16
 pitch0_default = .1
 pitch1_default = .1
-angles_default = 405
+angles_default = 101
 
 
 thetas = numpy.arange(0., 2.*numpy.pi, 2.*numpy.pi/angles_default)
 xis = numpy.arange(-.45+.025, .5, .1)
 
-def get_projectors(thetas, xis, xipitch, n0=n0_default, n1=n1_default, pitch0=pitch0_default, pitch1=pitch1_default):
+def get_projectors(thetas, xis, xipitch, n0=n0_default, n1=n1_default, pitch0=pitch0_default, pitch1=pitch1_default, offset0=0., offset1=0.):
     width0 = n0 * pitch0
     width1 = n1 * pitch1
-    p = fp.projector_siddon2d(thetas, xis, n0, n1, width0, width1)
-    p_diff = fp.differential_projector_siddon2d(thetas, xis-xipitch, xis+xipitch, n0, n1, width0, width1) 
+    p = fp.projector_siddon2d(thetas, xis, n0, n1, width0, width1, offset0, offset1)
+    p_diff = fp.differential_projector_siddon2d(thetas, xis-xipitch, xis+xipitch, n0, n1, width0, width1, offset0, offset1) 
     p_re = fp.reverse_indexes(p, n0, n1)
     p_diff_re = fp.reverse_indexes(p_diff, n0, n1)
     return ((p, p_re), (p_diff, p_diff_re), (thetas, xis), (n0, n1))
@@ -42,12 +42,12 @@ def reshape_volume(vol, n0, n1):
     
 def phantom_boxes(n0=n0_default, n1=n1_default, n0_border=2, n1_border=2, vmax=(1., 1., 1.)):
     volume = empty_volume()
-    volume[0,3:7,3:5] = 1.*vmax[0]
-    volume[0,3:7,5:7] = .5*vmax[0]
-    volume[1,3:5,3:7] = 1.*vmax[1]
-    volume[1,5:7,3:7] = .5*vmax[1]
-    volume[2,3,3] = 1.*vmax[2]
-    volume[2,6,6] = .5*vmax[2]
+    volume[0,4:12,4:8] = 1.*vmax[0]
+    volume[0,4:12,8:12] = .5*vmax[0]
+    volume[1,4:8,4:12] = 1.*vmax[1]
+    volume[1,8:12,4:12] = .5*vmax[1]
+    volume[2,5:7,5:7] = 1.*vmax[2]
+    volume[2,9:11,9:11] = .5*vmax[2]
     return volume
     
 def phantom_random(n0=n0_default, n1=n1_default, n0_border=2, n1_border=2, bounds=((0.,1.),(0.,1.),(0.,1.))):
