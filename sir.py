@@ -11,8 +11,8 @@ import matplotlib.pyplot as pl
 import scipy.optimize as opt
 import time
 
-n0_default = 16
-n1_default = 16
+n0_default = 12
+n1_default = 12
 pitch0_default = .1
 pitch1_default = .1
 angles_default = 101
@@ -42,12 +42,12 @@ def reshape_volume(vol, n0, n1):
     
 def phantom_boxes(n0=n0_default, n1=n1_default, n0_border=2, n1_border=2, vmax=(1., 1., 1.)):
     volume = empty_volume()
-    volume[0,4:12,4:8] = 1.*vmax[0]
-    volume[0,4:12,8:12] = .5*vmax[0]
-    volume[1,4:8,4:12] = 1.*vmax[1]
-    volume[1,8:12,4:12] = .5*vmax[1]
-    volume[2,5:7,5:7] = 1.*vmax[2]
-    volume[2,9:11,9:11] = .5*vmax[2]
+    volume[0,1:11,1:6] = 1.*vmax[0]
+    volume[0,1:11,6:11] = .5*vmax[0]
+    volume[1,1:6,1:11] = 1.*vmax[1]
+    volume[1,6:11,1:11] = .5*vmax[1]
+    volume[2,2:5,2:5] = 1.*vmax[2]
+    volume[2,7:10,7:10] = .5*vmax[2]
     return volume
     
 def phantom_random(n0=n0_default, n1=n1_default, n0_border=2, n1_border=2, bounds=((0.,1.),(0.,1.),(0.,1.))):
@@ -78,7 +78,7 @@ def stepping(N0, V0, projection, phi0, psteps):
     return N
     
 def loglikelihood(N, N_exp):
-    return numpy.sum(N_exp-N*numpy.log(N_exp))
+    return numpy.sum(N_exp-N*numpy.log(N_exp)+N*numpy.log(N)-N)
     
 def ll(volume, N, N0, V0, phi0, projectors, psteps):
     N_exp = stepping(N0, V0, forward_project(volume, projectors), phi0, psteps)
