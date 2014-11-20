@@ -4,3 +4,6 @@
 #
 # Copyright (C)
 # 2012-2014 André Ritter (andre.ritter@fau.de)
+
+from io import load_ranges
+
