@@ -14,13 +14,13 @@ class LoadTXT(object):
     '''
     A data loader that uses numpy.loadtxt function to read data from plain text
     files. Objects of class LoadTXT can be used as functions that expect a
-    filename to be loaded. The function returns a numpy.array object with the
+    filename to be loaded. The function returns a numpy.ndarray object with the
     content loaded from the file.
     
-    :param *args: Additional positional arguments supported by numpy.loadtxt
-                  function.
-    :param **kwargs: Additional keyword arguments suppoerted by numpy.loadtxt
-                     function.
+    :param args: Additional positional arguments supported by numpy.loadtxt
+                 function.
+    :param kwargs: Additional keyword arguments suppoerted by numpy.loadtxt
+                   function.
     '''
     def __init__(self, *args, **kwargs):
         self._args = args
@@ -32,21 +32,21 @@ class LoadHDF5(object):
     '''
     A data loader that uses h5py.File objects to read data from HDF5 files.
     Objects of class LoadHDF5 can be used as functions that expect a filename to
-    be loaded. The function returns a numpy.array object with the content loaded
+    be loaded. The function returns a numpy.ndarray object with the content loaded
     from the file. This class can for example be used to load data from Matlab
     created HDF5 files. 
     
     :param str key: A key that specifies the data object to be extracted from
                     the HDF5 file.
-    :param *args: Additional positional arguments supported by h5py.File class
-                  except mode which is always 'r' for read only access.
-    :param **kwargs: Additional keyword arguments supported by h5py.File class
-                     except mode.
+    :param args: Additional positional arguments supported by h5py.File class
+                 except mode which is always 'r' for read only access.
+    :param kwargs: Additional keyword arguments supported by h5py.File class
+                   except mode.
     '''
     def __init__(self, key, *args, **kwargs):
         self._key = key
-        self.set_args('r', *args, **kwargs)
-    def set_args(self, *args, **kwargs):
+        self._set_args('r', *args, **kwargs)
+    def _set_args(self, *args, **kwargs):
         self._args = args
         self._kwargs = kwargs
     def __call__(self, filename):
@@ -64,11 +64,11 @@ def load_ranges(filename, *args, **kwargs):
                          the replacement field can only be positional. For each
                          positional replacement field a range has to be given as
                          an additional argument to load_ranges function. 
-    :param *args: Additional arguments containing the ranges for the replacement
-                  fields within the given filename. The order in which ranges
-                  have to be given is tied to the position of the replacement
-                  field.
-    :param **kwargs: Additional keyword arguments which are defined below.
+    :param args: Additional arguments containing the ranges for the replacement
+                 fields within the given filename. The order in which ranges
+                 have to be given is tied to the position of the replacement
+                 field.
+    :param kwargs: Additional keyword arguments which are defined below.
     :param callable loader: A callable object that returns the array content
                             which is extracted from the file specified by the
                             filename given to the loader. If not given a LoadTXT
@@ -78,9 +78,17 @@ def load_ranges(filename, *args, **kwargs):
                                 from a single file. Any my do any operations on
                                 the given data. The callable has to return the
                                 result of the operations. The result should be
-                                an numpy.array object. The shape of the returned
-                                numpy.array object should be the same for all
-                                given input data. Default: None. 
+                                an numpy.ndarray object. The shape of the
+                                returned numpy.ndarray object should be the same
+                                for all given input data. Default: None. 
+                                
+    Example loading data from a range of 9 (1 to 9) Matlab created HDF5 files
+    using the LoadHDF5 loader. The data contained within the files has the key
+    'stepping'::
+    
+        data = pycon.io.load_ranges('obj_{0}_Mausknochen_Probe34_{0}.mat', 
+                                    numpy.arange(1,10),
+                                    loader=pycon.io.LoadHDF5('stepping'))
     '''
     loader = kwargs['loader'] if ('loader' in kwargs) else LoadTXT()
     preprocess = kwargs['preprocess'] if ('preprocess' in kwargs) else None
