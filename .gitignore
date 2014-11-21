@@ -36,3 +36,7 @@ setup.cfg
 .cproject
 .project
 .pydevproject
+
+# Build directories
+build
+_build
