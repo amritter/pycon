@@ -11,8 +11,6 @@ Talbot-Lau interferometry.
 Show the documentation with pycon.show_doc_html().
 '''
 
-from io import load_ranges
-
 def show_doc_html(refresh=False):
     '''
     Show the documentation. This needs a webbrowser to be installed.
@@ -25,12 +23,12 @@ def show_doc_html(refresh=False):
     import os
     import os.path
     import subprocess
-    package_root = os.path.dirname(os.path.abspath(__file__))
-    html_index = os.path.join(package_root, 'doc/_build/html/index.html')
+    package_root = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
+    html_index = os.path.join(package_root, '../doc/_build/html/index.html')
     # Try to update documentation if needed.
     if refresh:
         cwd_old = os.getcwd()
-        os.chdir(os.path.join(package_root, 'doc'))
+        os.chdir(os.path.join(package_root, '../doc'))
         if subprocess.call(['make', 'html']) == 0:
             print 'Html documentation refreshed.'
         else:

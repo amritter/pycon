@@ -13,9 +13,11 @@ pycon_tomo_fp = Extension('pycon.tomo.fp',
                     sources = ['pycon/tomo/fp.cc'])
 
 setup (name = 'pycon',
-       version = '1.0',
+       version = '0.0',
        description = 'pycon - A python framework for image reconstruction in '
                      'X-ray Talbot-Lau interferometry.',
+       author = 'André Ritter',
+       author_email = 'andre.ritter@fau.de',
        packages = ['pycon', 
                    'pycon.phreco',
                    'pycon.tomo'],
