@@ -8,7 +8,6 @@
 The phreco module collects utilities to reconstruct parameters from phase
 sampling curves.
 
-
 The reconstruction is done on numpy.ndarray objects with any number of
 dimensions with functions in this module starting by the prefix ``reco_``. In
 general it is assumed that algorithms return a mean, a phase and the
