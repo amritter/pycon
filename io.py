@@ -9,6 +9,7 @@ A module collecting utilities to read and write data from and to files.
 '''
 import numpy
 import h5py
+import scipy.io
 
 class LoadTXT(object):
     '''
@@ -32,9 +33,9 @@ class LoadHDF5(object):
     '''
     A data loader that uses h5py.File objects to read data from HDF5 files.
     Objects of class LoadHDF5 can be used as functions that expect a filename to
-    be loaded. The function returns a numpy.ndarray object with the content loaded
-    from the file. This class can for example be used to load data from Matlab
-    created HDF5 files. 
+    be loaded. The function returns a numpy.ndarray object with the content
+    loaded from the file. This class can also be used to load data from Matlab
+    created HDF5 files with .mat suffix.
     
     :param str key: A key that specifies the data object to be extracted from
                     the HDF5 file.
@@ -50,10 +51,32 @@ class LoadHDF5(object):
         self._args = args
         self._kwargs = kwargs
     def __call__(self, filename):
-        with h5py.File(filename) as hdf5_file:
+        with h5py.File(filename, *self._args, **self._kwargs) as hdf5_file:
             data = numpy.array(hdf5_file[self._key])
         return data
+
+class LoadMat(object):
+    '''
+    A data loader that uses scipy.io.loadmat to read data from Matlab .mat files.
+    Objects of class LoadMat can be used as functions that expect a filename to
+    be loaded. The function returns a numpy.ndarray object with the content
+    loaded from the file. This loader does not support .mat files in HDF5 format
+    starting with Matlab version 7.3. To load these files use the LoadHDF5
+    class.
     
+    :param str key: A key that specifies the data object to be extracted from
+                    the .mat file.
+    :param args: Additional positional arguments supported by scipy.io.loadmat.
+    :param kwargs: Additional keyword arguments supported by  scipy.io.loadmat.
+    '''
+    def __init__(self, key, *args, **kwargs):
+        self._key = key
+        self._args = args
+        self._kwargs = kwargs
+    def __call__(self, filename):
+        return scipy.io.loadmat(filename, *self._args, **self._kwargs)['key']
+
+
 def load_ranges(filename, *args, **kwargs):
     '''
     Load data from a range of files containing equal shaped array data.
