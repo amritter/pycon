@@ -114,8 +114,8 @@ within_bounds(const npy_double c, const npy_double s, const npy_double xi,
   const npy_double sinv = 1. / s;
   const npy_double p0start = (xi - start1 * s) * cinv;
   const npy_double p0end = (xi - end1 * s) * cinv;
-  const npy_double p1start = (xi - start0 * s) * sinv;
-  const npy_double p1end = (xi - end0 * s) * sinv;
+  const npy_double p1start = (xi - start0 * c) * sinv;
+  const npy_double p1end = (xi - end0 * c) * sinv;
   return (point_within_bounds(p0start, start0, end0)
       || point_within_bounds(p0end, start0, end0)
       || point_within_bounds(p1start, start1, end1)

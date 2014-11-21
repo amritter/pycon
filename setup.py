@@ -7,12 +7,16 @@
 
 from distutils.core import setup, Extension
 
-fp = Extension('fp',
+pycon_tomo_fp = Extension('pycon.tomo.fp',
                     libraries = ['boost_python', 'm'],
                     extra_compile_args = ['-std=c++11'],
-                    sources = ['fp.cc'])
+                    sources = ['pycon/tomo/fp.cc'])
 
 setup (name = 'pycon',
        version = '1.0',
-       description = '',
-       ext_modules = [fp])
+       description = 'pycon - A python framework for image reconstruction in '
+                     'X-ray Talbot-Lau interferometry.',
+       packages = ['pycon', 
+                   'pycon.phreco',
+                   'pycon.tomo'],
+       ext_modules = [pycon_tomo_fp])
