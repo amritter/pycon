@@ -1,19 +1,11 @@
 Reference of module pycon
 =========================
 
-pycon.phreco
-------------
-
-.. automodule:: pycon.phreco
-   :members:
-   :undoc-members:
+.. toctree::
+   :maxdepth: 2
    
-pycon.phreco.util
------------------
-
-.. automodule:: pycon.phreco.util
-   :members:
-   :undoc-members:
+   reference_phreco
+   reference_tomo
 
 pycon.io
 --------
