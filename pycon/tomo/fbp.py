@@ -11,7 +11,7 @@ import scipy.interpolate as sip
 import kernel
 
 def xi(x, y, theta):
-    return x*numpy.cos(theta)+y*numpy.sin(theta)
+    return x*numpy.cos(theta)-y*numpy.sin(theta)
 
 def zero_pad(array, pads=0., value=0., axis=None):
     array = numpy.array(array)
