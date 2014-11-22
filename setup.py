@@ -12,6 +12,11 @@ pycon_tomo_fp = Extension('pycon.tomo.fp',
                     extra_compile_args = ['-std=c++11'],
                     sources = ['pycon/tomo/fp.cc'])
 
+pycon_tomo__fp = Extension('pycon.tomo._fp',
+                    libraries = ['m'],
+                    extra_compile_args = ['-std=c++11'],
+                    sources = ['pycon/tomo/_fp.cc'])
+
 setup (name = 'pycon',
        version = '0.0',
        description = 'pycon - A python framework for image reconstruction in '
@@ -21,4 +26,5 @@ setup (name = 'pycon',
        packages = ['pycon', 
                    'pycon.phreco',
                    'pycon.tomo'],
-       ext_modules = [pycon_tomo_fp])
+       ext_modules = [pycon_tomo_fp,
+                      pycon_tomo__fp])
