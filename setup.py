@@ -15,7 +15,8 @@ pycon_tomo_fp = Extension('pycon.tomo.fp',
 pycon_tomo__fp = Extension('pycon.tomo._fp',
                     libraries = ['m'],
                     extra_compile_args = ['-std=c++11'],
-                    sources = ['pycon/tomo/_fp.cc'])
+                    sources = ['pycon/tomo/_fp.cc',
+                               'pycon/tomo/siddon.cc'])
 
 setup (name = 'pycon',
        version = '0.0',

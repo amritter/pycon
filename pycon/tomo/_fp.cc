@@ -6,81 +6,18 @@
 #include <Python.h>
 #define NPY_NO_DEPRECATED_API NPY_1_8_API_VERSION
 #include "numpy/arrayobject.h"
+#include "fp.h"
 #include <iostream>
 #include <cmath>
-#include <list>
-#include <vector>
 #include <algorithm>
 #include <numeric>
 #include <functional>
 #include <map>
 
-struct Vertex;
-typedef std::list<Vertex> ray_type;
-typedef std::vector<ray_type> projector_type;
-typedef ray_type
-(*ray_func_ptr)(npy_double, npy_double, size_t, size_t, npy_double, npy_double,
-    npy_double, npy_double);
-
-inline npy_double
-x_by_lambda(npy_double xi, npy_double lambda, npy_double c, npy_double s)
+Vertex::Vertex(index_type index, weight_type weight) :
+    index(index), weight(weight)
 {
-  return (lambda * s + xi * c);
 }
-
-inline npy_double
-y_by_lambda(npy_double xi, npy_double lambda, npy_double c, npy_double s)
-{
-  return (lambda * c - xi * s);
-}
-
-inline npy_double
-xi_by_xy(npy_double x, npy_double y, npy_double c, npy_double s)
-{
-  return (x * c - y * s);
-}
-
-inline npy_double
-x_by_y(npy_double xi, npy_double s, npy_double cinv, npy_double y)
-{
-  return (y * s + xi) * cinv;
-}
-
-inline npy_double
-y_by_x(npy_double xi, npy_double c, npy_double sinv, npy_double x)
-{
-  return (x * c - xi) * sinv;
-}
-
-inline npy_double
-lambda_by_x(npy_double xi, npy_double c, npy_double sinv, npy_double x)
-{
-  return (x - xi * c) * sinv;
-}
-
-inline npy_double
-lambda_by_y(npy_double xi, npy_double s, npy_double cinv, npy_double y)
-{
-  return (y + xi * s) * cinv;
-}
-
-inline long
-get_index(npy_double start, npy_double pitch, npy_double pos)
-{
-  return long((pos - start) / pitch);
-}
-
-struct Vertex
-{
-  typedef size_t index_type;
-  typedef npy_double weight_type;
-  index_type index;
-  weight_type weight;
-  Vertex(index_type _index, weight_type weight) :
-      index(_index), weight(weight)
-  {
-  }
-};
 
 bool
 operator<(const Vertex& lop, const Vertex& rop)
@@ -186,176 +123,25 @@ ray_to_PyObject(const ray_type& ray)
   return Py_BuildValue("OO", indexes.ptr(), weights.ptr());
 }
 
-ray_type
-siddon_vertices(npy_double lstart, npy_double lpitch, size_t size)
+bool
+point_within_bounds(double pos, double start, double end)
 {
-  ray_type ray;
-  npy_double length = lstart;
-  if (lpitch >= 0)
-    {
-      for (long index = 0; index <= size; ++index)
-        {
-          ray.push_back(Vertex(index, length));
-          length += lpitch;
-        }
-    }
-  else
-    {
-      for (long index = 0; index <= size; ++index)
-        {
-          ray.push_front(Vertex(index - 1, length));
-          length += lpitch;
-        }
-    }
-  return ray;
+  return (start <= pos && pos < end);
 }
 
 bool
-point_within_bounds(const npy_double c, const npy_double start,
-    const npy_double end)
+ray_within_bounds(double c, double s, double cinv, double sinv, double xi,
+    double startx, double endx, double starty, double endy)
 {
-  return (start <= c && c < end);
-}
-
-bool
-within_bounds(const npy_double c, const npy_double s, const npy_double cinv,
-    const npy_double sinv, const npy_double xi, const npy_double startx,
-    const npy_double endx, const npy_double starty, const npy_double endy)
-{
-  const npy_double x_starty = x_by_y(xi, s, cinv, starty);
-  const npy_double x_endy = x_by_y(xi, s, cinv, endy);
-  const npy_double y_startx = y_by_x(xi, c, sinv, startx);
-  const npy_double y_endx = y_by_x(xi, c, sinv, endx);
+  const double x_starty = x_by_y(xi, s, cinv, starty);
+  const double x_endy = x_by_y(xi, s, cinv, endy);
+  const double y_startx = y_by_x(xi, c, sinv, startx);
+  const double y_endx = y_by_x(xi, c, sinv, endx);
   return (point_within_bounds(x_starty, startx, endx)
       || point_within_bounds(x_endy, startx, endx)
       || point_within_bounds(y_startx, starty, endy)
       || point_within_bounds(y_endx, starty, endy));
 
-}
-
-ray_type
-siddon2d(npy_double theta, npy_double xi, size_t n0, size_t n1,
-    npy_double width0, npy_double width1, npy_double center0,
-    npy_double center1)
-{
-  ray_type ray;
-
-  const npy_double s = std::sin(theta);
-  const npy_double c = std::cos(theta);
-  const npy_double cinv = 1. / c;
-  const npy_double sinv = 1. / s;
-  const npy_double pitch0 = width0 / n0;
-  const npy_double pitch1 = width1 / n1;
-  const npy_double start0 = -.5 * width0 + center0;
-  const npy_double start1 = -.5 * width1 + center1;
-
-  if (!within_bounds(c, s, cinv, sinv, xi, start0, start0 + width0, start1,
-      start1 + width1))
-    {
-      return ray;
-    }
-
-  if (c == 0) // cos(theta) == 0 => Ray parallel to x.
-    {
-      const long index1 = get_index(start1, pitch1, -xi * s);
-      for (long index0 = 0; index0 < n0; ++index0)
-        {
-          ray.emplace_back(index0 + index1 * n0, pitch0);
-        }
-    }
-  else if (s == 0) // sin(theta) == 0 => Ray parallel to y.
-    {
-      const long index0 = get_index(start0, pitch0, xi * c);
-      for (long index1 = 0; index1 < n1; ++index1)
-        {
-          ray.emplace_back(index0 + index1 * n0, pitch1);
-        }
-    }
-  else
-    {
-      const npy_double lpitch0 = lambda_by_x(0., c, sinv, pitch0);
-      const npy_double lpitch1 = lambda_by_y(0., s, cinv, pitch1);
-
-      const npy_double lstart0 = lambda_by_x(xi, c, sinv, start0);
-      const npy_double lstart1 = lambda_by_y(xi, s, cinv, start1);
-
-      const ray_type vertices0 = siddon_vertices(lstart0, lpitch0, n0);
-      const ray_type vertices1 = siddon_vertices(lstart1, lpitch1, n1);
-
-      auto it0 = vertices0.begin();
-      const auto it0_end = vertices0.end();
-      auto it1 = vertices1.begin();
-      const auto it1_end = vertices1.end();
-
-      auto index0_last = it0->index;
-      auto index1_last = it1->index;
-
-      if (*it0 < *it1)
-        {
-          while (*it0 < *it1 && it0 != it0_end)
-            {
-              index0_last = it0->index;
-              ++it0;
-            }
-        }
-      else
-        {
-          while (*it1 < *it0 && it1 != it1_end)
-            {
-              index1_last = it1->index;
-              ++it1;
-            }
-        }
-
-      npy_double weight_limit = 1e-12
-          * std::sqrt(pitch0 * pitch0 + pitch1 * pitch1);
-      while (it0 != it0_end && it1 != it1_end)
-        {
-          npy_double weight = 0.;
-          if (*it0 < *it1)
-            {
-              auto it0_next = it0;
-              ++it0_next;
-              if (it0_next != it0_end)
-                {
-                  index0_last = it0->index;
-                  if (*it0_next < *it1)
-                    {
-                      weight = it0_next->weight - it0->weight;
-                    }
-                  else
-                    {
-                      weight = it1->weight - it0->weight;
-                    }
-                }
-              it0 = it0_next;
-            }
-          else
-            {
-              auto it1_next = it1;
-              ++it1_next;
-              if (it1_next != it1_end)
-                {
-                  index1_last = it1->index;
-                  if (*it1_next < *it0)
-                    {
-                      weight = it1_next->weight - it1->weight;
-                    }
-                  else
-                    {
-                      weight = it0->weight - it1->weight;
-                    }
-                }
-              it1 = it1_next;
-            }
-
-          if (weight > weight_limit)
-            {
-              ray.emplace_back(index0_last + index1_last * n0, weight);
-            }
-        }
-    }
-  return ray;
 }
 
 template<ray_func_ptr ray_func>
@@ -400,80 +186,335 @@ template<ray_func_ptr ray_func>
     return ray_up;
   }
 
+template<ray_func_ptr ray_func, class Iterator>
+  projector_type
+  get_projector(Iterator thetas_it, const Iterator thetas_end, Iterator xis_it,
+      const Iterator xis_end, size_t n, int n0, int n1, npy_double width0,
+      npy_double width1, npy_double center0, npy_double center1)
+  {
+    projector_type projector;
+    projector.reserve(n);
+    for (; thetas_it != thetas_end; ++xis_it)
+      {
+        for (; xis_it != xis_end; ++thetas_it)
+          {
+            projector.push_back(
+                ray_func(*thetas_it, *xis_it, n0, n1, width0, width1, center0,
+                    center1));
+          }
+      }
+    return projector;
+  }
+
+template<ray_func_ptr ray_func, class Iterator>
+  projector_type
+  get_differential_projector(Iterator thetas_it, const Iterator thetas_end,
+      Iterator xis_it, const Iterator xis_end, Iterator xis_diff, size_t n,
+      size_t n0, size_t n1, npy_double width0, npy_double width1,
+      npy_double center0, npy_double center1)
+  {
+    projector_type projector;
+    projector.reserve(n);
+    for (; thetas_it != thetas_end; ++thetas_it)
+      {
+        for (; xis_it != xis_end; ++xis_it)
+          {
+            projector.push_back(
+                ray_diff<ray_func>(*thetas_it, *xis_it - .5 * (*xis_diff),
+                    *xis_it + .5 * (*xis_diff), n0, n1, width0, width1, center0,
+                    center1));
+            ++xis_diff;
+          }
+      }
+    return projector;
+  }
+
 extern "C"
 {
-
-  static PyObject*
-  _fp_ray(PyObject* self, PyObject* args, PyObject* kwargs)
+///////////////////////////////
+// Definition of _fp.Projector.
+  typedef struct
   {
-    npy_double theta;
-    npy_double xi;
-    npy_int nx;
-    npy_int ny;
-    npy_double widthx;
-    npy_double widthy;
-    npy_double centerx = 0.;
-    npy_double centery = 0.;
-    const char* method = "siddon";
+    PyObject_HEAD
+    shape_type* _shape_i;
+    shape_type* _shape_o;
+    projector_type* _projector;
+  } _fp_Projector;
 
-    static const char* kwlist[] =
-      { "theta", "xi", "nx", "ny", "widthx", "widthy", "centerx", "centery",
-          "method", nullptr };
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ddiidd|dds:ray",
-        const_cast<char**>(kwlist), &theta, &xi, &nx, &ny, &widthx, &widthy,
-        &centery, &centery, &method))
+  static void
+  _fp_Projector_dealloc(_fp_Projector* self)
+  {
+    if (self->_shape_i != nullptr)
       {
-        return nullptr;
+        delete self->_shape_i;
       }
-    return ray_to_PyObject(
-        siddon2d(theta, xi, nx, ny, widthx, widthy, centerx, centery));
+    if (self->_shape_o != nullptr)
+      {
+        delete self->_shape_o;
+      }
+    if (self->_projector != nullptr)
+      {
+        delete self->_projector;
+      }
+    self->ob_type->tp_free(reinterpret_cast<PyObject*>(self));
   }
 
   static PyObject*
-  _fp_ray_diff(PyObject* self, PyObject* args, PyObject* kwargs)
+  _fp_Projector_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
   {
-    npy_double theta;
-    npy_double xi_lo;
-    npy_double xi_hi;
-    npy_int nx;
-    npy_int ny;
-    npy_double widthx;
-    npy_double widthy;
-    npy_double centerx = 0.;
-    npy_double centery = 0.;
-    const char* method = "siddon";
+    _fp_Projector *self;
+    self = reinterpret_cast<_fp_Projector*>(type->tp_alloc(type, 0));
 
-    static const char* kwlist[] =
-      { "theta", "xi_lo", "xi_hi", "nx", "ny", "widthx", "widthy", "centerx",
-          "centery", "method", nullptr };
+    if (self != nullptr)
+      {
+        self->_shape_i = new shape_type();
+        self->_shape_o = new shape_type();
+        self->_projector = new projector_type();
+      }
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "dddiidd|dds:ray_diff",
-        const_cast<char**>(kwlist), &theta, &xi_lo, &xi_hi, &nx, &ny, &widthx,
-        &widthy, &centery, &centery, &method))
+    return reinterpret_cast<PyObject*>(self);
+  }
+
+  static int
+  _fp_Projector_init(_fp_Projector *self, PyObject *args, PyObject *kwds)
+  {
+    return 0;
+  }
+
+  PyObject*
+  _fp_Projector_transposed(_fp_Projector* self)
+  {
+    const size_t size_o =
+        (self->_shape_o->size() == 0) ?
+            0 :
+            std::accumulate(self->_shape_o->begin(), self->_shape_o->end(), 1,
+                std::multiplies<size_t>());
+    _fp_Projector* ret = reinterpret_cast<_fp_Projector*>(_fp_Projector_new(
+        self->ob_type, nullptr, nullptr));
+
+    ret->_projector->resize(size_o);
+    *(ret->_shape_i) = *(self->_shape_o);
+    *(ret->_shape_o) = *(self->_shape_i);
+
+    size_t pixel_index = 0;
+    for (const auto& ray : *(self->_projector))
+      {
+        for (const auto& vertex : ray)
+          {
+            (*(ret->_projector))[vertex.index].emplace_back(pixel_index,
+                vertex.weight);
+          }
+        ++pixel_index;
+      }
+    for (auto& ray : *(ret->_projector))
+      {
+        ray.sort();
+      }
+    return reinterpret_cast<PyObject*>(ret);
+  }
+
+  PyObject*
+  _fp_Projector_project(const _fp_Projector* self, PyObject *args)
+  {
+    PyObject* volume = nullptr;
+
+
+    ContiguousFixedDArray<2> arr_volume(volume);
+    npy_intp* shape_o = new npy_intp[self->_shape_o->size()];
+    std::copy(self->_shape_o->begin(), self->_shape_o->end(), shape_o);
+    ContiguousFixedDArray<2> arr_projection(shape_o);
+    delete shape_o;
+
+    if (arr_volume.ptr() == nullptr || arr_projection.ptr() == nullptr)
       {
         return nullptr;
       }
-    return ray_to_PyObject(
-        ray_diff<siddon2d>(theta, xi_lo, xi_hi, nx, ny, widthx, widthy, centerx,
-            centery));
+
+    size_t index = 0;
+    for (const auto& ray : *(self->_projector))
+      {
+        npy_double value = 0.;
+        for (const auto& vertex : ray)
+          {
+            value += arr_volume[vertex.index] * vertex.weight;
+          }
+        arr_projection[index] = value;
+        ++index;
+      }
+    return reinterpret_cast<PyObject*>(arr_projection.ptr());
   }
 
-  static PyMethodDef _fp_methods[] =
+  static PyMethodDef _fp_Projector_methods[] =
     {
-          { "ray", (PyCFunction) _fp_ray, METH_VARARGS | METH_KEYWORDS,
-              "Get ray." },
-          { "ray_diff", (PyCFunction) _fp_ray_diff, METH_VARARGS
-              | METH_KEYWORDS, "Get differential ray." },
-          { nullptr, nullptr, 0, nullptr } /* Sentinel */
+          { "transposed", (PyCFunction) _fp_Projector_transposed, METH_NOARGS,
+              "." },
+          { "project", (PyCFunction) _fp_Projector_project, METH_VARARGS,
+              "." },
+          { nullptr } /* Sentinel */
     };
 
-  PyMODINIT_FUNC
-  init_fp(void)
+static PyTypeObject _fp_ProjectorType =
   {
-    import_array();
-
-    (void) Py_InitModule("_fp", _fp_methods);
+    PyObject_HEAD_INIT(nullptr)
+    0, /*ob_size*/
+    "_fp.Projector", /*tp_name*/
+    sizeof(_fp_Projector), /*tp_basicsize*/
+    0, /*tp_itemsize*/
+    (destructor)_fp_Projector_dealloc, /*tp_dealloc*/
+    0, /*tp_print*/
+    0, /*tp_getattr*/
+    0, /*tp_setattr*/
+    0, /*tp_compare*/
+    0, /*tp_repr*/
+    0, /*tp_as_number*/
+    0, /*tp_as_sequence*/
+    0, /*tp_as_mapping*/
+    0, /*tp_hash */
+    0, /*tp_call*/
+    0, /*tp_str*/
+    0, /*tp_getattro*/
+    0, /*tp_setattro*/
+    0, /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT, /*tp_flags*/
+    "A sparse matrix storing the projection coefficients.", /* tp_doc */
+    0, /* tp_traverse */
+    0, /* tp_clear */
+    0, /* tp_richcompare */
+    0, /* tp_weaklistoffset */
+    0, /* tp_iter */
+    0, /* tp_iternext */
+    _fp_Projector_methods, /* tp_methods */
+    0, /* tp_members */
+    0, /* tp_getset */
+    0, /* tp_base */
+    0, /* tp_dict */
+    0, /* tp_descr_get */
+    0, /* tp_descr_set */
+    0, /* tp_dictoffset */
+    (initproc)_fp_Projector_init, /* tp_init */
+    0, /* tp_alloc */
+    _fp_Projector_new, /* tp_new */
   }
+;
+
+///////////////
+// _fp methods.
+
+static PyObject*
+_fp_siddon2d(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  double theta;
+  double xi;
+  int nx;
+  int ny;
+  double widthx;
+  double widthy;
+  double centerx = 0.;
+  double centery = 0.;
+  double xi_diff = NAN;
+
+  static const char* kwlist[] =
+    { "theta", "xi", "nx", "ny", "widthx", "widthy", "centerx", "centery",
+        "xi_diff", nullptr };
+
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ddiidd|ddd:ray",
+      const_cast<char**>(kwlist), &theta, &xi, &nx, &ny, &widthx, &widthy,
+      &centery, &centery, &xi_diff))
+    {
+      return nullptr;
+    }
+  if (xi_diff == xi_diff) // xi_diff is set.
+    {
+      return ray_to_PyObject(
+          ray_diff<siddon2d>(theta, xi - .5 * xi_diff, xi + .5 * xi_diff, nx,
+              ny, widthx, widthy, centerx, centery));
+    }
+  return ray_to_PyObject(
+      siddon2d(theta, xi, nx, ny, widthx, widthy, centerx, centery));
+}
+
+static PyObject*
+_fp_projector_siddon2d(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  PyObject* thetas = nullptr;
+  PyObject* xis = nullptr;
+  PyObject* xis_diff = nullptr;
+  int nx;
+  int ny;
+  double widthx;
+  double widthy;
+  double centerx = 0.;
+  double centery = 0.;
+
+  static const char* kwlist[] =
+    { "thetas", "xis", "nx", "ny", "widthx", "widthy", "centerx", "centery",
+        "xis_diff", nullptr };
+
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOiidd|ddO:projector_siddon",
+      const_cast<char**>(kwlist), &thetas, &xis, &nx, &ny, &widthx, &widthy,
+      &centery, &centery, &xis_diff))
+    {
+      return nullptr;
+    }
+
+  ContiguousFixedDArray<1> arr_thetas(thetas);
+  ContiguousFixedDArray<1> arr_xis(xis);
+
+  _fp_Projector* ret = reinterpret_cast<_fp_Projector*>(_fp_Projector_new(
+      self->ob_type, nullptr, nullptr));
+
+  ret->_shape_o->push_back(arr_thetas.size());
+  ret->_shape_o->push_back(arr_xis.size());
+  ret->_shape_i->push_back(ny);
+  ret->_shape_i->push_back(nx);
+
+  size_t n = arr_thetas.size() * arr_xis.size();
+
+  if (xis_diff != nullptr)
+    {
+      ContiguousFixedDArray<1> arr_xis_diff(xis_diff);
+      if (arr_xis.size() != arr_xis_diff.size())
+        {
+          Py_DECREF(ret);
+          PyErr_SetString(PyExc_ValueError,
+              "Len of ndarray xis_diff does not match xis.");
+          return nullptr;
+        }
+      *(ret->_projector) = get_differential_projector<siddon2d>(
+          arr_thetas.begin(), arr_thetas.end(), arr_xis.begin(), arr_xis.end(),
+          arr_xis_diff.begin(), n, nx, ny, widthx, widthy, centerx, centery);
+    }
+  else
+    {
+      *(ret->_projector) = get_projector<siddon2d>(arr_thetas.begin(),
+          arr_thetas.end(), arr_xis.begin(), arr_xis.end(), n, nx, ny, widthx,
+          widthy, centerx, centery);
+    }
+  return reinterpret_cast<PyObject*>(ret);
+}
+
+static PyMethodDef _fp_methods[] =
+  {
+    { "siddon2d", (PyCFunction) _fp_siddon2d, METH_VARARGS | METH_KEYWORDS,
+        "Get siddon ray coefficients." },
+    { "projector_siddon2d", (PyCFunction) _fp_projector_siddon2d, METH_VARARGS
+        | METH_KEYWORDS, "Get siddon projector." },
+    { nullptr, nullptr, 0, nullptr } /* Sentinel */
+  };
+
+PyMODINIT_FUNC
+init_fp(void)
+{
+  import_array();
+
+  if (PyType_Ready(&_fp_ProjectorType) < 0)
+    return;
+
+  auto* module = Py_InitModule("_fp", _fp_methods);
+
+  Py_INCREF (&_fp_ProjectorType);
+  PyModule_AddObject(module, "Projector",
+      reinterpret_cast<PyObject *>(&_fp_ProjectorType));
+}
 
 }
