@@ -4,7 +4,6 @@
 // Copyright (C)
 // 2012-2014 André Ritter (andre.ritter@fau.de)
 #include "fp.h"
-#include <cstddef>
 #include <cmath>
 #include <algorithm>
 #include <numeric>

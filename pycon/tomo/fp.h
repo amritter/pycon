@@ -5,6 +5,7 @@
 // 2012-2014 André Ritter (andre.ritter@fau.de)
 #ifndef _fp_h
 #define _fp_h
+#include <cstddef>
 #include <list>
 #include <vector>
 
