@@ -143,7 +143,8 @@ def reco_fft(arr, order=1, axis=0):
               array.
     :rtpye: numpy.ndarray
     '''   
-    ft =  numpy.rollaxis(numpy.fft.rfft(arr, axis=axis), axis)
-    return numpy.array([numpy.abs(ft[0] / ft.shape[0]),
+    ft = numpy.rollaxis(numpy.fft.rfft(arr, axis=axis), axis)
+    norm = 1. / arr.shape[axis]
+    return numpy.array([numpy.abs(ft[0] * norm),
                         numpy.angle(ft[order]),
                         abs(2.*ft[order] / ft[0])])
