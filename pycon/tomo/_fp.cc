@@ -188,15 +188,16 @@ template<ray_func_ptr ray_func>
 
 template<ray_func_ptr ray_func, class Iterator>
   projector_type
-  get_projector(Iterator thetas_it, const Iterator thetas_end, Iterator xis_it,
-      const Iterator xis_end, size_t n, int n0, int n1, npy_double width0,
-      npy_double width1, npy_double center0, npy_double center1)
+  get_projector(Iterator thetas_begin, const Iterator thetas_end,
+      Iterator xis_begin, const Iterator xis_end, size_t n, int n0, int n1,
+      npy_double width0, npy_double width1, npy_double center0,
+      npy_double center1)
   {
     projector_type projector;
     projector.reserve(n);
-    for (; thetas_it != thetas_end; ++xis_it)
+    for (auto thetas_it = thetas_begin; thetas_it != thetas_end; ++thetas_it)
       {
-        for (; xis_it != xis_end; ++thetas_it)
+        for (auto xis_it = xis_begin; xis_it != xis_end; ++xis_it)
           {
             projector.push_back(
                 ray_func(*thetas_it, *xis_it, n0, n1, width0, width1, center0,
@@ -208,22 +209,23 @@ template<ray_func_ptr ray_func, class Iterator>
 
 template<ray_func_ptr ray_func, class Iterator>
   projector_type
-  get_differential_projector(Iterator thetas_it, const Iterator thetas_end,
-      Iterator xis_it, const Iterator xis_end, Iterator xis_diff, size_t n,
-      size_t n0, size_t n1, npy_double width0, npy_double width1,
+  get_differential_projector(Iterator thetas_begin, const Iterator thetas_end,
+      Iterator xis_begin, const Iterator xis_end, Iterator xis_diff_begin,
+      size_t n, size_t n0, size_t n1, npy_double width0, npy_double width1,
       npy_double center0, npy_double center1)
   {
     projector_type projector;
     projector.reserve(n);
-    for (; thetas_it != thetas_end; ++thetas_it)
+    for (auto thetas_it = thetas_begin; thetas_it != thetas_end; ++thetas_it)
       {
-        for (; xis_it != xis_end; ++xis_it)
+        auto xis_diff_it = xis_diff_begin;
+        for (auto xis_it = xis_begin; xis_it != xis_end; ++xis_it)
           {
             projector.push_back(
-                ray_diff<ray_func>(*thetas_it, *xis_it - .5 * (*xis_diff),
-                    *xis_it + .5 * (*xis_diff), n0, n1, width0, width1, center0,
-                    center1));
-            ++xis_diff;
+                ray_diff<ray_func>(*thetas_it, *xis_it - .5 * (*xis_diff_it),
+                    *xis_it + .5 * (*xis_diff_it), n0, n1, width0, width1,
+                    center0, center1));
+            ++xis_diff_it;
           }
       }
     return projector;
@@ -318,6 +320,10 @@ extern "C"
   {
     PyObject* volume = nullptr;
 
+    if (!PyArg_ParseTuple(args, "O", &volume))
+      {
+        return nullptr;
+      }
 
     ContiguousFixedDArray<2> arr_volume(volume);
     npy_intp* shape_o = new npy_intp[self->_shape_o->size()];
@@ -348,10 +354,34 @@ extern "C"
     {
           { "transposed", (PyCFunction) _fp_Projector_transposed, METH_NOARGS,
               "." },
-          { "project", (PyCFunction) _fp_Projector_project, METH_VARARGS,
-              "." },
+          { "project", (PyCFunction) _fp_Projector_project, METH_VARARGS, "." },
           { nullptr } /* Sentinel */
     };
+
+  static Py_ssize_t
+  _fp_Projector_sq_length(PyObject *o)
+  {
+    return reinterpret_cast<_fp_Projector*>(o)->_projector->size();
+  }
+
+  static PyObject*
+  _fp_Projector_sq_item(PyObject *o, Py_ssize_t index)
+  {
+    auto self = reinterpret_cast<_fp_Projector*>(o);
+    if (index < 0 && index >= self->_projector->size())
+      {
+        PyErr_SetString(PyExc_ValueError, "Index is out of bounds.");
+        return nullptr;
+      }
+    return ray_to_PyObject((*(self->_projector))[index]);
+  }
+
+  static PySequenceMethods _fp_ProjectorSequenceMethods =
+    { _fp_Projector_sq_length, // sq_length
+        0, // sq_concat
+        0, // sq_repeat
+        _fp_Projector_sq_item, // sq_item
+        0, 0, 0, 0 };
 
 static PyTypeObject _fp_ProjectorType =
   {
@@ -367,7 +397,7 @@ static PyTypeObject _fp_ProjectorType =
     0, /*tp_compare*/
     0, /*tp_repr*/
     0, /*tp_as_number*/
-    0, /*tp_as_sequence*/
+    &_fp_ProjectorSequenceMethods, /*tp_as_sequence*/
     0, /*tp_as_mapping*/
     0, /*tp_hash */
     0, /*tp_call*/
@@ -460,8 +490,8 @@ _fp_projector_siddon2d(PyObject* self, PyObject* args, PyObject* kwargs)
   ContiguousFixedDArray<1> arr_thetas(thetas);
   ContiguousFixedDArray<1> arr_xis(xis);
 
-  _fp_Projector* ret = reinterpret_cast<_fp_Projector*>(_fp_Projector_new(
-      self->ob_type, nullptr, nullptr));
+  _fp_Projector* ret = reinterpret_cast<_fp_Projector*>(PyObject_CallObject(
+      reinterpret_cast<PyObject*>(&_fp_ProjectorType), nullptr));
 
   ret->_shape_o->push_back(arr_thetas.size());
   ret->_shape_o->push_back(arr_xis.size());
