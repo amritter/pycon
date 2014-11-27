@@ -7,11 +7,6 @@
 
 from distutils.core import setup, Extension
 
-pycon_tomo_fp = Extension('pycon.tomo.fp',
-                    libraries = ['boost_python', 'm'],
-                    extra_compile_args = ['-std=c++11'],
-                    sources = ['pycon/tomo/fp.cc'])
-
 pycon_tomo__fp = Extension('pycon.tomo._fp',
                     libraries = ['m'],
                     extra_compile_args = ['-std=c++11'],
@@ -27,5 +22,4 @@ setup (name = 'pycon',
        packages = ['pycon', 
                    'pycon.phreco',
                    'pycon.tomo'],
-       ext_modules = [pycon_tomo_fp,
-                      pycon_tomo__fp])
+       ext_modules = [pycon_tomo__fp])
