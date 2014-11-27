@@ -42,8 +42,11 @@ template<size_t D, class T = npy_double, int typenum = NPY_DOUBLE>
       _size = std::accumulate(_shape, _shape + D, 1, std::multiplies<size_t>());
     }
     ContiguousFixedDArray(npy_intp* shape) :
-        ContiguousFixedDArray(PyArray_ZEROS(D, shape, typenum, 0))
+        _pyo(PyArray_ZEROS(D, shape, typenum, 0)), _shape(), _data(
+            static_cast<T*>(PyArray_DATA(reinterpret_cast<PyArrayObject*>(_pyo)))), _size(
+            std::accumulate(shape, shape + D, 1, std::multiplies<size_t>()))
     {
+      std::copy_n(shape, D, _shape);
     }
     ~ContiguousFixedDArray()
     {
@@ -103,6 +106,12 @@ template<size_t D, class T = npy_double, int typenum = NPY_DOUBLE>
     ptr() const
     {
       return _pyo;
+    }
+    PyObject*
+    new_ref() const
+    {
+      Py_INCREF(ptr());
+      return ptr();
     }
   };
 
@@ -286,15 +295,15 @@ extern "C"
   PyObject*
   _fp_Projector_transposed(_fp_Projector* self)
   {
-    const size_t size_o =
-        (self->_shape_o->size() == 0) ?
+    const size_t size_i =
+        (self->_shape_i->size() == 0) ?
             0 :
-            std::accumulate(self->_shape_o->begin(), self->_shape_o->end(), 1,
+            std::accumulate(self->_shape_i->begin(), self->_shape_i->end(), 1,
                 std::multiplies<size_t>());
-    _fp_Projector* ret = reinterpret_cast<_fp_Projector*>(_fp_Projector_new(
-        self->ob_type, nullptr, nullptr));
+    _fp_Projector* ret = reinterpret_cast<_fp_Projector*>(PyObject_CallObject(
+        reinterpret_cast<PyObject*>(self->ob_type), nullptr));
 
-    ret->_projector->resize(size_o);
+    ret->_projector->resize(size_i);
     *(ret->_shape_i) = *(self->_shape_o);
     *(ret->_shape_o) = *(self->_shape_i);
 
@@ -333,6 +342,7 @@ extern "C"
 
     if (arr_volume.ptr() == nullptr || arr_projection.ptr() == nullptr)
       {
+        //PyErr_SetString(PyExc_ValueError, "");
         return nullptr;
       }
 
@@ -347,7 +357,7 @@ extern "C"
         arr_projection[index] = value;
         ++index;
       }
-    return reinterpret_cast<PyObject*>(arr_projection.ptr());
+    return reinterpret_cast<PyObject*>(arr_projection.new_ref());
   }
 
   static PyMethodDef _fp_Projector_methods[] =
