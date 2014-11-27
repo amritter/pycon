@@ -6,7 +6,7 @@
 # 2012-2014 André Ritter (andre.ritter@fau.de)
 
 import numpy
-import fp
+import _fp
 import matplotlib.pyplot as pl
 import scipy.optimize as opt
 import time
@@ -24,10 +24,10 @@ xis = numpy.arange(-.45+.025, .5, .1)
 def get_projectors(thetas, xis, xipitch, n0=n0_default, n1=n1_default, pitch0=pitch0_default, pitch1=pitch1_default, offset0=0., offset1=0.):
     width0 = n0 * pitch0
     width1 = n1 * pitch1
-    p = fp.projector_siddon2d(thetas, xis, n0, n1, width0, width1, offset0, offset1)
-    p_diff = fp.differential_projector_siddon2d(thetas, xis-xipitch, xis+xipitch, n0, n1, width0, width1, offset0, offset1) 
-    p_re = fp.reverse_indexes(p, n0, n1)
-    p_diff_re = fp.reverse_indexes(p_diff, n0, n1)
+    p = _fp.projector_siddon2d(thetas, xis, n0, n1, width0, width1, offset0, offset1)
+    p_diff = _fp.projector_siddon2d(thetas, xis, n0, n1, width0, width1, offset0, offset1, xis_diff=xipitch*numpy.ones_like(xis)) 
+    p_re = p.transposed()
+    p_diff_re = p_diff.transposed()
     return ((p, p_re), (p_diff, p_diff_re), (thetas, xis), (n0, n1))
 
 def phi0_random_uniform(thetas, xis, b_lo=0., b_hi=2.*numpy.pi):
@@ -58,16 +58,14 @@ def phantom_random(n0=n0_default, n1=n1_default, n0_border=2, n1_border=2, bound
     
 def forward_project(volume, projectors):
     volume = reshape_volume(volume, *projectors[3])
-    return numpy.reshape([numpy.exp(-numpy.array(fp.project(projectors[0][0], volume[0]))),
-                        .5*numpy.array(fp.project(projectors[1][0], volume[1])),
-                        numpy.exp(-numpy.array(fp.project(projectors[0][0], volume[2])))], (3, len(projectors[2][0]), len(projectors[2][1])))
+    return numpy.array([numpy.exp(-projectors[0][0].project(volume[0])),
+                        .5*projectors[1][0].project(volume[1]),
+                        numpy.exp(-projectors[0][0].project(volume[2]))])
                 
 def volume_project(projection, projectors):
-    return reshape_volume([
-    fp.project(projectors[0][1], projection[0]),
-    .5*numpy.array(fp.project(projectors[1][1], projection[1])),
-    fp.project(projectors[0][1], projection[2])],
-    *projectors[3])
+    return numpy.array([projectors[0][1].project(projection[0]),
+                        .5*projectors[1][1].project(projection[1]),
+                        projectors[0][1].project(projection[2])])
     
 def get_phis(phi, phi0, psteps):
     return numpy.repeat(phi[numpy.newaxis], len(psteps), axis=0)+psteps[:,numpy.newaxis,numpy.newaxis]+phi0
