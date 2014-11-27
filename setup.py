@@ -6,8 +6,10 @@
 # 2012-2014 André Ritter (andre.ritter@fau.de)
 
 from distutils.core import setup, Extension
+import numpy
 
 pycon_tomo__fp = Extension('pycon.tomo._fp',
+                    include_dirs = [numpy.get_include()],
                     libraries = ['m'],
                     extra_compile_args = ['-std=c++11'],
                     sources = ['pycon/tomo/_fp.cc',
