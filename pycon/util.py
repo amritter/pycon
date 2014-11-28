@@ -7,6 +7,7 @@
 '''
 A module collecting some general utilities to process data.
 '''
+import numpy
 
 class Chain(list):
     '''
@@ -191,3 +192,39 @@ class DetectorCorrection(object):
         return arr-self._offset
     def _corr_gain_and_offset(self, arr):
         return self._gainc*(arr-self._offset)
+    
+def apply_along_axes(func, axes, arr, *args, **kwargs):
+    '''
+    Apply a function to all arrays aligned along the given axis contained within
+    given array.
+    
+    :param callable func: A function accepting an numpy.ndarray as first
+                          argument. The array has a dimension, which is
+                          equivalent to the number of elements in axes.
+    :param tuple axes: The axes that define the shape of the sub arrays in the
+                       given order.
+    :param numpy.narray arr: An array object.
+    :param args: Additional arguments to func.
+    :param kwargs: Additional keyword arguments to func.
+    :returns: A numpy.ndarray object, in which the axes defined by axes are
+              removed. New axes are appended to the end of the shape of the
+              array according to the returned value of func.
+    '''
+    if arr.ndim < len(axes):
+        raise ValueError('Dimensions of arr has to be at least as high as the'
+                         'given number of axes')
+    axes = map(lambda axis: axis if axis >=0 else arr.ndim+axis, axes)
+    for i, axis in enumerate(axes):
+        for j, axis_after in enumerate(axes[i+1:]):
+            if axis_after > axis:
+                axes[i+j+1] -= 1
+        arr = numpy.rollaxis(arr, axis, arr.ndim)
+    if arr.ndim == len(axes):
+        return func(arr, *args, **kwargs)
+    iter_shape = arr.shape[:-len(axes)]
+    slice_shape = arr.shape[-len(axes):]
+    arr = numpy.array(map(lambda s: func(s, *args, **kwargs),
+                          arr.reshape((numpy.prod(iter_shape),)+slice_shape)))
+    return arr.reshape(iter_shape+arr.shape[-len(axes):]);
+    
+    
