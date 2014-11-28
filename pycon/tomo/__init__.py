@@ -53,19 +53,19 @@ def reco_fbp(sino, thetas=None, xis=None, xi_offs=0., xy=None, kernel=None, pads
     :param thetas_axis: Specifies the position of the theta-axis in sino.
     :param xis_axis: Specifies the position of the xi-axis in sino.
     '''
-    if not thetas:  # Assume projections over 2 pi.
+    if thetas is None:  # Assume projections over 2 pi.
         thetas = numpy.arange(0., 2.*numpy.pi, 2.*numpy.pi / sino.shape[thetas_axis])
-    if not xis:
+    if xis is None:
         xis = numpy.arange(sino.shape[xis_axis]) - .5 * (sino.shape[xis_axis] - 1)+xi_offs
-    if not xy:
+    if xy is None:
         xi_max = numpy.max(numpy.abs(xis))
         xi_diff_max = numpy.max(numpy.diff(xis))
         n_coords = int(numpy.round(2.*xi_max / xi_diff_max))
         coords = numpy.arange(n_coords) - .5 * (n_coords - 1)
         xy = numpy.meshgrid(coords, coords)
-    if not pads:
+    if pads is None:
         pads = int(.5 * sino.shape[xis_axis])
-    if not kernel:
+    if kernel is None:
         kernel = fbp.ramp()
     sino_filtered = fbp.unpad(fbp.filter_projections(fbp.pad(sino, pads, pad_value, xis_axis), kernel, xis_axis), pads, xis_axis)
     x, y = xy
