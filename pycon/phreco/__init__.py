@@ -93,6 +93,17 @@ def difference(arr, ref):
     '''
     return arr - ref
 
+def diff_unwrap(arr, ref):
+    '''
+    Get the difference of arr and ref and unwrap it using numpy.unwrap.
+    
+    :param numpy.ndarray arr: An array containing only a single parameter type.
+    :param numpy.ndarray ref: An array containing only a single parameter type
+                             with reference values.
+    :returns: ``arr - ref`` unwrapped
+    '''
+    return numpy.unwrap(arr - ref)
+
 def deref(arr, ref, deref_mean=None, deref_phase=None,
           deref_visibility=None):
     '''
