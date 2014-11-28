@@ -459,7 +459,7 @@ _fp_siddon2d(PyObject* self, PyObject* args, PyObject* kwargs)
 
   if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ddiidd|ddd:ray",
       const_cast<char**>(kwlist), &theta, &xi, &nx, &ny, &widthx, &widthy,
-      &centery, &centery, &xi_diff))
+      &centerx, &centery, &xi_diff))
     {
       return nullptr;
     }
