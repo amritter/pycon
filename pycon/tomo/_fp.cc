@@ -492,7 +492,7 @@ _fp_projector_siddon2d(PyObject* self, PyObject* args, PyObject* kwargs)
 
   if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOiidd|ddO:projector_siddon",
       const_cast<char**>(kwlist), &thetas, &xis, &nx, &ny, &widthx, &widthy,
-      &centery, &centery, &xis_diff))
+      &centerx, &centery, &xis_diff))
     {
       return nullptr;
     }
