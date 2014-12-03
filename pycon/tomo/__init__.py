@@ -16,7 +16,10 @@
 '''
 import fbp
 import numpy
+import scipy.interpolate
+import skimage.restoration
 import pycon.util
+import pycon.phreco
 
 def reco_fbp(sino, thetas=None, xis=None, xi_offs=0., xy=None, kernel=None, pads=None, 
              pad_value=0., interpolation='linear', thetas_axis=-2, xis_axis=-1):
@@ -71,4 +74,15 @@ def reco_fbp(sino, thetas=None, xis=None, xi_offs=0., xy=None, kernel=None, pads
     x, y = xy
     return pycon.util.apply_along_axes(fbp.backproject, (thetas_axis, xis_axis),
                                        sino_filtered, thetas, xis, x, y, interpolation)
+    
+def sino_interp(arr, thetas, thetas_new, theta_axis, kind=3):
+    arr[1] = skimage.restoration.unwrap_phase(arr[1])
+    interp = numpy.apply_along_axis(
+                lambda value: scipy.interpolate.interp1d(thetas, value,
+                                                         kind=kind,
+                                                         bounds_error=False)
+                                                         (thetas_new),
+                theta_axis, arr)
+    interp[1] = pycon.phreco.wrap(interp[1])
+    return interp
 
