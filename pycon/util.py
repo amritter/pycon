@@ -37,7 +37,7 @@ class Chain(list):
                     pycon.util.Rebin((2, 1), (2, 2)))
     '''
     def __init__(self, *args):
-        list.__init__(self, *args)
+        list.__init__(self, args)
     def __call__(self, arr):
         for processor in self:
             arr = processor(arr)
@@ -174,16 +174,16 @@ class DetectorCorrection(object):
                                  the mean dark readout value.
     '''
     def __init__(self, gain=None, offset=None):
-        self._gainc = 1./gain if gain else None
+        self._gainc = 1./gain if gain is not None else None
         self._offset = offset
-        if self._gainc and self._offset:
+        if self._gainc is not None and self._offset is not None:
             if self._gainc.shape != self._offset.shape:
                 raise ValueError('Shape of gain and offset array do not match')
-            self.__call__ = self._corr_gain_and_offset
-        elif self._gainc:
-            self.__call__ = self._corr_gain
-        elif self._offset:
-            self.__call__ = self._corr_offset
+            self._callf = self._corr_gain_and_offset
+        elif self._gainc is not None:
+            self._callf = self._corr_gain
+        elif self._offset is not None:
+            self._callf = self._corr_offset
         else:
             ValueError('Either gain or offset or both have to be set.')
     def _corr_gain(self, arr):
@@ -192,6 +192,11 @@ class DetectorCorrection(object):
         return arr-self._offset
     def _corr_gain_and_offset(self, arr):
         return self._gainc*(arr-self._offset)
+    def __call__(self, arr):
+        if self._callf is not None:
+            return self._callf(arr)
+        else:
+            raise TypeError('\'DetectorCorrection\' object is not callable.')
     
 def apply_along_axes(func, axes, arr, *args, **kwargs):
     '''
