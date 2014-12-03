@@ -20,6 +20,18 @@ Vertex::Vertex(index_type index, weight_type weight) :
 }
 
 bool
+cmp_less_index(const Vertex& a, const Vertex& b)
+{
+  return a.index < b.index;
+}
+
+bool
+cmp_less_weight(const Vertex& a, const Vertex& b)
+{
+  return a.weight < b.weight;
+}
+
+bool
 operator<(const Vertex& lop, const Vertex& rop)
 {
   return (lop.weight < rop.weight);
@@ -118,18 +130,22 @@ template<size_t D, class T = npy_double, int typenum = NPY_DOUBLE>
 PyObject*
 ray_to_PyObject(const ray_type& ray)
 {
-  npy_intp size[1] =
-    { (npy_intp) ray.size() };
-  ContiguousFixedDArray<1, npy_intp, NPY_INTP> indexes(size);
-  ContiguousFixedDArray<1> weights(size);
-  size_t i = 0;
-  for (const auto& w : ray)
+  PyObject* indexes = PyList_New(ray.size());
+  PyObject* weights = PyList_New(ray.size());
+  if (indexes == nullptr || weights == nullptr)
     {
-      indexes[i] = w.index;
-      weights[i] = w.weight;
-      ++i;
+      Py_XDECREF(indexes);
+      Py_XDECREF(weights);
+      return nullptr;
     }
-  return Py_BuildValue("OO", indexes.ptr(), weights.ptr());
+  Py_ssize_t index = 0;
+  for (const auto& v : ray)
+    {
+      PyList_SetItem(indexes, index, PyInt_FromSize_t(v.index));
+      PyList_SetItem(weights, index, PyFloat_FromDouble(v.weight));
+      ++index;
+    }
+  return Py_BuildValue("NN", indexes, weights);
 }
 
 bool
@@ -155,14 +171,62 @@ ray_within_bounds(double c, double s, double cinv, double sinv, double xi,
 
 template<ray_func_ptr ray_func>
   ray_type
-  ray_diff(npy_double theta, npy_double xi_low, npy_double xi_up, size_t n0,
-      size_t n1, npy_double width0, npy_double width1, npy_double center0,
-      npy_double center1)
+  ray_mean(double theta, double xi, size_t nx, size_t ny, double widthx,
+      double widthy, double centerx, double centery, double xi_width,
+      size_t xi_n)
   {
-    auto ray_low = ray_func(theta, xi_low, n0, n1, width0, width1, center0,
-        center1);
-    auto ray_up = ray_func(theta, xi_up, n0, n1, width0, width1, center0,
-        center1);
+    const double pitchx = widthx / nx;
+    const double pitchy = widthy / ny;
+    const double weight_limit = 1e-12
+        * std::sqrt(pitchx * pitchx + pitchy * pitchy);
+
+    if (xi_width > 0 && xi_n > 1)
+      {
+        const double xi_pitch = xi_width / (xi_n - 1);
+        const double xi_start = xi - .5 * xi_width;
+
+        ray_type ray;
+        for (size_t i = 0; i < xi_n; ++i)
+          {
+            ray_type ray_new = ray_func(theta, xi_start + i * xi_pitch, nx, ny,
+                widthx, widthy, centerx, centery);
+
+            for (auto& v : ray)
+              {
+                auto it = find_if(ray_new.begin(), ray_new.end(),
+                    [v](const Vertex& v_new)
+                      { return v.index==v_new.index;});
+                if (it != ray_new.end())
+                  {
+                    v.weight += it->weight;
+                    ray_new.erase(it);
+                  }
+              }
+            ray.splice(ray.end(), ray_new);
+          }
+        const double norm = 1. / (xi_n);
+        for (auto v : ray)
+          {
+            v.weight *= norm;
+          }
+        ray.remove_if([weight_limit](const Vertex& v)
+          { return v.weight < weight_limit;});
+        ray.sort(cmp_less_index);
+        return ray;
+      }
+    return ray_func(theta, xi, nx, ny, widthx, widthy, centerx, centery);
+  }
+
+template<ray_func_ptr ray_func>
+  ray_type
+  ray_diff(double theta, double xi, size_t n0, size_t n1, double width0,
+      double width1, double center0, double center1, double xi_diff,
+      double xi_mean, size_t xi_n)
+  {
+    auto ray_low = ray_mean<ray_func>(theta, xi - .5 * xi_diff, n0, n1, width0,
+        width1, center0, center1, xi_mean, xi_n);
+    auto ray_up = ray_mean<ray_func>(theta, xi + .5 * xi_diff, n0, n1, width0,
+        width1, center0, center1, xi_mean, xi_n);
     const npy_double pitch0 = width0 / n0;
     const npy_double pitch1 = width1 / n1;
     const npy_double weight_limit = 1e-12
@@ -183,15 +247,14 @@ template<ray_func_ptr ray_func>
         v_low.weight = -v_low.weight;
       }
     ray_up.splice(ray_up.end(), ray_low);
-    const auto ray_up_end = ray_up.end();
-    for (auto v_it = ray_up.begin(); v_it != ray_up_end; ++v_it)
+    const double norm = 1. / xi_diff;
+    for (auto v : ray_up)
       {
-        if (std::abs(v_it->weight) <= weight_limit)
-          {
-            ray_up.erase(v_it);
-          }
+        v.weight *= norm;
       }
-    ray_up.sort();
+    ray_up.remove_if([weight_limit](const Vertex& v)
+      { return std::abs(v.weight)<weight_limit;});
+    ray_up.sort(cmp_less_index);
     return ray_up;
   }
 
@@ -199,42 +262,28 @@ template<ray_func_ptr ray_func, class Iterator>
   projector_type
   get_projector(Iterator thetas_begin, const Iterator thetas_end,
       Iterator xis_begin, const Iterator xis_end, size_t n, int n0, int n1,
-      npy_double width0, npy_double width1, npy_double center0,
-      npy_double center1)
+      double width0, double width1, double center0, double center1,
+      double xi_diff, double xi_mean, size_t xi_n)
   {
     projector_type projector;
     projector.reserve(n);
+    const bool bdiff = (xi_diff != 0);
     for (auto thetas_it = thetas_begin; thetas_it != thetas_end; ++thetas_it)
       {
         for (auto xis_it = xis_begin; xis_it != xis_end; ++xis_it)
           {
-            projector.push_back(
-                ray_func(*thetas_it, *xis_it, n0, n1, width0, width1, center0,
-                    center1));
-          }
-      }
-    return projector;
-  }
-
-template<ray_func_ptr ray_func, class Iterator>
-  projector_type
-  get_differential_projector(Iterator thetas_begin, const Iterator thetas_end,
-      Iterator xis_begin, const Iterator xis_end, Iterator xis_diff_begin,
-      size_t n, size_t n0, size_t n1, npy_double width0, npy_double width1,
-      npy_double center0, npy_double center1)
-  {
-    projector_type projector;
-    projector.reserve(n);
-    for (auto thetas_it = thetas_begin; thetas_it != thetas_end; ++thetas_it)
-      {
-        auto xis_diff_it = xis_diff_begin;
-        for (auto xis_it = xis_begin; xis_it != xis_end; ++xis_it)
-          {
-            projector.push_back(
-                ray_diff<ray_func>(*thetas_it, *xis_it - .5 * (*xis_diff_it),
-                    *xis_it + .5 * (*xis_diff_it), n0, n1, width0, width1,
-                    center0, center1));
-            ++xis_diff_it;
+            if (bdiff)
+              {
+                projector.push_back(
+                    ray_diff<ray_func>(*thetas_it, *xis_it, n0, n1, width0,
+                        width1, center0, center1, xi_diff, xi_mean, xi_n));
+              }
+            else
+              {
+                projector.push_back(
+                    ray_mean<ray_func>(*thetas_it, *xis_it, n0, n1, width0,
+                        width1, center0, center1, xi_mean, xi_n));
+              }
           }
       }
     return projector;
@@ -451,26 +500,29 @@ _fp_siddon2d(PyObject* self, PyObject* args, PyObject* kwargs)
   double widthy;
   double centerx = 0.;
   double centery = 0.;
-  double xi_diff = NAN;
+  double xi_diff = 0.;
+  double xi_mean = 0.;
+  int xi_n = 0;
 
   static const char* kwlist[] =
     { "theta", "xi", "nx", "ny", "widthx", "widthy", "centerx", "centery",
-        "xi_diff", nullptr };
+        "xi_diff", "xi_mean", "xi_n", nullptr };
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ddiidd|ddd:ray",
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ddiidd|ddddi:siddon2d",
       const_cast<char**>(kwlist), &theta, &xi, &nx, &ny, &widthx, &widthy,
-      &centerx, &centery, &xi_diff))
+      &centerx, &centery, &xi_diff, &xi_mean, &xi_n))
     {
       return nullptr;
     }
-  if (xi_diff == xi_diff) // xi_diff is set.
+  if (xi_diff != 0.) // xi_diff is set.
     {
       return ray_to_PyObject(
-          ray_diff<siddon2d>(theta, xi - .5 * xi_diff, xi + .5 * xi_diff, nx,
-              ny, widthx, widthy, centerx, centery));
+          ray_diff<siddon2d>(theta, xi, nx, ny, widthx, widthy, centerx,
+              centery, xi_diff, xi_mean, xi_n));
     }
   return ray_to_PyObject(
-      siddon2d(theta, xi, nx, ny, widthx, widthy, centerx, centery));
+      ray_mean<siddon2d>(theta, xi, nx, ny, widthx, widthy, centerx, centery,
+          xi_mean, xi_n));
 }
 
 static PyObject*
@@ -478,21 +530,24 @@ _fp_projector_siddon2d(PyObject* self, PyObject* args, PyObject* kwargs)
 {
   PyObject* thetas = nullptr;
   PyObject* xis = nullptr;
-  PyObject* xis_diff = nullptr;
   int nx;
   int ny;
   double widthx;
   double widthy;
   double centerx = 0.;
   double centery = 0.;
+  double xi_diff = 0.;
+  double xi_mean = 0.;
+  int xi_n = 0;
 
   static const char* kwlist[] =
     { "thetas", "xis", "nx", "ny", "widthx", "widthy", "centerx", "centery",
-        "xis_diff", nullptr };
+        "xi_diff", "xi_mean", "xi_n", nullptr };
 
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOiidd|ddO:projector_siddon",
-      const_cast<char**>(kwlist), &thetas, &xis, &nx, &ny, &widthx, &widthy,
-      &centerx, &centery, &xis_diff))
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs,
+      "OOiidd|ddddi:projector_siddon2d", const_cast<char**>(kwlist), &thetas,
+      &xis, &nx, &ny, &widthx, &widthy, &centerx, &centery, &xi_diff, &xi_mean,
+      &xi_n))
     {
       return nullptr;
     }
@@ -510,26 +565,10 @@ _fp_projector_siddon2d(PyObject* self, PyObject* args, PyObject* kwargs)
 
   size_t n = arr_thetas.size() * arr_xis.size();
 
-  if (xis_diff != nullptr)
-    {
-      ContiguousFixedDArray<1> arr_xis_diff(xis_diff);
-      if (arr_xis.size() != arr_xis_diff.size())
-        {
-          Py_DECREF(ret);
-          PyErr_SetString(PyExc_ValueError,
-              "Len of ndarray xis_diff does not match xis.");
-          return nullptr;
-        }
-      *(ret->_projector) = get_differential_projector<siddon2d>(
-          arr_thetas.begin(), arr_thetas.end(), arr_xis.begin(), arr_xis.end(),
-          arr_xis_diff.begin(), n, nx, ny, widthx, widthy, centerx, centery);
-    }
-  else
-    {
-      *(ret->_projector) = get_projector<siddon2d>(arr_thetas.begin(),
-          arr_thetas.end(), arr_xis.begin(), arr_xis.end(), n, nx, ny, widthx,
-          widthy, centerx, centery);
-    }
+  *(ret->_projector) = get_projector<siddon2d>(arr_thetas.begin(),
+      arr_thetas.end(), arr_xis.begin(), arr_xis.end(), n, nx, ny, widthx,
+      widthy, centerx, centery, xi_diff, xi_mean, xi_n);
+
   return reinterpret_cast<PyObject*>(ret);
 }
 
