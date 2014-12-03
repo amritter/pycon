@@ -17,6 +17,15 @@ visibility.
 '''
 import numpy
 
+def wrap(arr):
+    '''
+    Wrap given values into -pi to pi interval.
+    
+    :param numpy.ndarray arr: An array.
+    :returns: Array with values wrapped to -pi to pi interval. 
+    '''
+    return numpy.remainder(arr+numpy.pi, 2.*numpy.pi)-numpy.pi
+
 def mean(arr):
     '''
     Get the mean values.
@@ -102,7 +111,7 @@ def diff_unwrap(arr, ref):
                              with reference values.
     :returns: ``arr - ref`` unwrapped
     '''
-    return numpy.unwrap(arr - ref)
+    return numpy.unwrap(wrap(arr) - wrap(ref))
 
 def deref(arr, ref, deref_mean=None, deref_phase=None,
           deref_visibility=None):
