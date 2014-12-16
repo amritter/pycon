@@ -16,6 +16,7 @@ Thus index 0 gives the mean, index 1 gives the phase and index 2 gives the
 visibility. 
 '''
 import numpy
+import skimage.restoration
 
 def wrap(arr):
     '''
@@ -102,7 +103,7 @@ def difference(arr, ref):
     '''
     return arr - ref
 
-def diff_unwrap(arr, ref):
+def diff_phase(arr, ref):
     '''
     Get the difference of arr and ref and unwrap it using numpy.unwrap.
     
@@ -111,7 +112,7 @@ def diff_unwrap(arr, ref):
                              with reference values.
     :returns: ``arr - ref`` unwrapped
     '''
-    return numpy.unwrap(wrap(arr) - wrap(ref))
+    return skimage.restoration.unwrap_phase(wrap(arr) - wrap(ref))
 
 def deref(arr, ref, deref_mean=None, deref_phase=None,
           deref_visibility=None):
@@ -141,9 +142,9 @@ def deref(arr, ref, deref_mean=None, deref_phase=None,
                                       None pycon.phreco.transmission is taken as
                                       default.
     '''
-    deref_mean = deref_mean if deref_mean else transmission
-    deref_phase = deref_phase if deref_phase else difference
-    deref_visibility = deref_visibility if deref_visibility else transmission
+    deref_mean = deref_mean if deref_mean is not None else transmission
+    deref_phase = deref_phase if deref_phase is not None else diff_phase
+    deref_visibility = deref_visibility if deref_visibility is not None else transmission
     return numpy.array([deref_mean(mean(arr), mean(ref)),
                         deref_phase(phase(arr), phase(ref)),
                         deref_visibility(visibility(arr), visibility(ref))])
