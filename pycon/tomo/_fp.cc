@@ -205,7 +205,7 @@ template<ray_func_ptr ray_func>
             ray.splice(ray.end(), ray_new);
           }
         const double norm = 1. / (xi_n);
-        for (auto v : ray)
+        for (auto& v : ray)
           {
             v.weight *= norm;
           }
@@ -258,12 +258,33 @@ template<ray_func_ptr ray_func>
     return ray_up;
   }
 
+void
+projector_mask_radial(projector_type& projector, size_t nx, size_t ny,
+    double widthy, double widthx, double offsetx, double offsety, double radius)
+{
+  const auto rr = radius * radius;
+  const double pitchx = widthx / (nx - 1);
+  const double pitchy = widthx / (ny - 1);
+  const double startx = -.5 * widthx + offsetx;
+  const double starty = -.5 * widthy + offsety;
+  auto out_of_radius = [rr, nx, pitchx, pitchy, startx, starty](const Vertex& v)
+    {
+      double x = startx + size_t(v.index%nx)*pitchx;
+      double y = starty + size_t(v.index/nx)*pitchy;
+      return ((x*x+y*y) > rr );
+    };
+  for (auto& ray : projector)
+    {
+      ray.remove_if(out_of_radius);
+    }
+}
+
 template<ray_func_ptr ray_func, class Iterator>
   projector_type
   get_projector(Iterator thetas_begin, const Iterator thetas_end,
-      Iterator xis_begin, const Iterator xis_end, size_t n, int n0, int n1,
-      double width0, double width1, double center0, double center1,
-      double xi_diff, double xi_mean, size_t xi_n)
+      Iterator xis_begin, const Iterator xis_end, size_t n, int nx, int ny,
+      double widthx, double widthy, double centerx, double centery,
+      double xi_diff, double xi_mean, size_t xi_n, double mask_radius)
   {
     projector_type projector;
     projector.reserve(n);
@@ -275,16 +296,21 @@ template<ray_func_ptr ray_func, class Iterator>
             if (bdiff)
               {
                 projector.push_back(
-                    ray_diff<ray_func>(*thetas_it, *xis_it, n0, n1, width0,
-                        width1, center0, center1, xi_diff, xi_mean, xi_n));
+                    ray_diff<ray_func>(*thetas_it, *xis_it, nx, ny, widthx,
+                        widthy, centerx, centery, xi_diff, xi_mean, xi_n));
               }
             else
               {
                 projector.push_back(
-                    ray_mean<ray_func>(*thetas_it, *xis_it, n0, n1, width0,
-                        width1, center0, center1, xi_mean, xi_n));
+                    ray_mean<ray_func>(*thetas_it, *xis_it, nx, ny, widthx,
+                        widthy, centerx, centery, xi_mean, xi_n));
               }
           }
+      }
+    if (mask_radius != 0)
+      {
+        projector_mask_radial(projector, nx, ny, widthx, widthy, 0., 0.,
+            mask_radius);
       }
     return projector;
   }
@@ -539,15 +565,16 @@ _fp_projector_siddon2d(PyObject* self, PyObject* args, PyObject* kwargs)
   double xi_diff = 0.;
   double xi_mean = 0.;
   int xi_n = 0;
+  double mask_radius = 0.;
 
   static const char* kwlist[] =
     { "thetas", "xis", "nx", "ny", "widthx", "widthy", "centerx", "centery",
-        "xi_diff", "xi_mean", "xi_n", nullptr };
+        "xi_diff", "xi_mean", "xi_n", "mask_radius", nullptr };
 
   if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-      "OOiidd|ddddi:projector_siddon2d", const_cast<char**>(kwlist), &thetas,
+      "OOiidd|ddddid:projector_siddon2d", const_cast<char**>(kwlist), &thetas,
       &xis, &nx, &ny, &widthx, &widthy, &centerx, &centery, &xi_diff, &xi_mean,
-      &xi_n))
+      &xi_n, &mask_radius))
     {
       return nullptr;
     }
@@ -567,7 +594,7 @@ _fp_projector_siddon2d(PyObject* self, PyObject* args, PyObject* kwargs)
 
   *(ret->_projector) = get_projector<siddon2d>(arr_thetas.begin(),
       arr_thetas.end(), arr_xis.begin(), arr_xis.end(), n, nx, ny, widthx,
-      widthy, centerx, centery, xi_diff, xi_mean, xi_n);
+      widthy, centerx, centery, xi_diff, xi_mean, xi_n, mask_radius);
 
   return reinterpret_cast<PyObject*>(ret);
 }
