@@ -21,11 +21,11 @@ angles_default = 101
 thetas = numpy.arange(0., 2.*numpy.pi, 2.*numpy.pi / angles_default)
 xis = numpy.arange(-.45 + .025, .5, .1)
 
-def get_projectors(thetas, xis, xipitch, n0=n0_default, n1=n1_default, pitch0=pitch0_default, pitch1=pitch1_default, offset0=0., offset1=0., n_mean=10):
+def get_projectors(thetas, xis, xipitch, n0=n0_default, n1=n1_default, pitch0=pitch0_default, pitch1=pitch1_default, offset0=0., offset1=0., n_mean=0, mask_radius=0):
     width0 = n0 * pitch0
     width1 = n1 * pitch1
-    p = _fp.projector_siddon2d(thetas, xis, n0, n1, width0, width1, offset0, offset1, xi_mean=xipitch, xi_n=n_mean)
-    p_diff = _fp.projector_siddon2d(thetas, xis, n0, n1, width0, width1, offset0, offset1, xi_diff=xipitch, xi_mean=xipitch, xi_n=n_mean) 
+    p = _fp.projector_siddon2d(thetas, xis, n0, n1, width0, width1, offset0, offset1, xi_mean=xipitch, xi_n=n_mean, mask_radius=mask_radius)
+    p_diff = _fp.projector_siddon2d(thetas, xis, n0, n1, width0, width1, offset0, offset1, xi_diff=xipitch, xi_mean=xipitch, xi_n=n_mean, mask_radius=mask_radius) 
     p_re = p.transposed()
     p_diff_re = p_diff.transposed()
     return ((p, p_re), (p_diff, p_diff_re), (thetas, xis), (n0, n1))
@@ -76,7 +76,7 @@ def stepping(N0, V0, projection, phi0, psteps):
     return N
     
 def loglikelihood(N, N_exp):
-    return numpy.sum(N_exp - N * numpy.log(N_exp) + N * numpy.log(N) - N)
+    return numpy.sum(numpy.nan_to_num(N_exp - N * numpy.log(N_exp) + N * numpy.log(N) - N))
     
 def ll(volume, N, N0, V0, phi0, projectors, psteps):
     N_exp = stepping(N0, V0, forward_project(volume, projectors), phi0, psteps)
@@ -95,6 +95,27 @@ def llgradient(volume, N, N0, V0, phi0, projectors, psteps):
         TD * numpy.sum(N_ratio * numpy.sin(phis), axis=0),
         TD * numpy.sum(N_ratio * C, axis=0)],
         projectors)
+    
+def XiSquared(N, N_exp):
+    return numpy.sum((N-N_exp)**2)
+
+def xs(volume, N, N0, V0, phi0, projectors, psteps):
+    N_exp = stepping(N0, V0, forward_project(volume, projectors), phi0, psteps)
+    return XiSquared(N, N_exp)
+
+def xsgradient(volume, N, N0, V0, phi0, projectors, psteps):
+    projection = forward_project(volume, projectors)
+    phis = get_phis(projection[1], phi0, psteps)
+    C = numpy.cos(phis)
+    T = N0 * projection[0]
+    TD = T * V0 * projection[2]
+    N_exp = T + TD * C
+    N_diff = N-N_exp
+    return volume_project([
+        2.*numpy.sum(N_diff*N_exp, axis=0),
+        -2.*TD * numpy.sum(N_diff * numpy.sin(phis), axis=0),
+        -2.*TD * numpy.sum(N_diff * C, axis=0)],
+        projectors)
         
 def ll3eps(eps, volume, grad, N, N0, V0, phi0, projectors, psteps):
     return ll(volume + numpy.abs(numpy.array(eps))[:, numpy.newaxis, numpy.newaxis], N, N0, V0, phi0, projectors, psteps)
@@ -105,15 +126,16 @@ fmin_methods = dict(
     )
         
 def reconstruct(N, N0, V0, phi0, projectors, psteps, method='bfgs',
-                gtol=1e-5, full_output=False, retall=False):
+                gtol=1e-5, full_output=False, retall=False, f=ll, fgrad=llgradient, vol_start=None):
     start = empty_volume(*projectors[3])
-    norm = 1. / abs(ll(start, N, N0, V0, phi0, projectors, psteps))
+    norm = 1. / abs(f(start, N, N0, V0, phi0, projectors, psteps))
+    start = start if vol_start is None else vol_start
     ret = fmin_methods[method](
-                    lambda *args: norm * ll(*args),
+                    lambda *args: norm * f(*args),
                     # ll,
                     start,
-                    lambda *args: norm * llgradient(*args).flatten(),
-                    # lambda *args: llgradient(*args).flatten(),
+                    lambda *args: norm * fgrad(*args).flatten(),
+                    #lambda *args: llgradient(*args).flatten(),
                     args=(N, N0, V0, phi0, projectors, psteps),
                     gtol=gtol,
                     full_output=full_output,
