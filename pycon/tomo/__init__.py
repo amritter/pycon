@@ -86,3 +86,41 @@ def sino_interp(arr, thetas, thetas_new, theta_axis, kind=3):
     interp[1] = pycon.phreco.wrap(interp[1])
     return interp
 
+def sino_polyinterp(arr, thetas, thetas_new, theta_axis, deg=3):
+    def _polyinterp(a):
+        return numpy.polyval(numpy.polyfit(thetas, a, deg), thetas_new)
+    arr[1] = skimage.restoration.unwrap_phase(arr[1])
+    interp = numpy.apply_along_axis(_polyinterp, theta_axis, arr)
+    interp[1] = pycon.phreco.wrap(interp[1])
+    return interp
+
+def sino_dpcenter(arr, axis=-1):
+    arr[1] = arr[1] - numpy.expand_dims(arr[1].mean(axis), axis)
+    return arr
+
+def sino_dppolycorrect(sino, axis=-1, deg=1):
+    x = numpy.arange(sino.shape[axis])
+    def _polycorrect(arr):
+        return arr-numpy.polyval(numpy.polyfit(x, arr, deg), x)
+    return numpy.apply_along_axis(_polycorrect, axis, sino)
+
+def estimate_cor(sino, axis=-1, as_offset=True):
+    '''
+    Estimate center of rotation for a given sinogram. The projection angles have
+    to be distributed equidistantly over interval lengths of integer multiples
+    of 2 pi.
+    
+    :param numpy.ndarray sino: A sinogram.
+    :param int axis: The xi axis.
+    :param bool as_offset: If True the center of rotation is given as a pixel
+                           offset to the center of the xi axis. If False the
+                           center of rotation is given as the absolute pixel
+                           position on the xi axis.
+    :returns: The center of rotation either as absolute value or as offset, both
+              in terms of a pixel position on the xi axis.
+    :rtype: float
+    '''
+    axes = tuple(numpy.delete(numpy.arange(sino.ndim), axis, 0))
+    m = sino.sum(axes)
+    c = numpy.sum(m*numpy.arange(len(m)))/m.sum()
+    return c-.5*(len(m)-1) if as_offset else c
