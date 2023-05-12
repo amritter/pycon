@@ -218,7 +218,7 @@ def apply_along_axes(func, axes, arr, *args, **kwargs):
     if arr.ndim < len(axes):
         raise ValueError('Dimensions of arr has to be at least as high as the'
                          'given number of axes')
-    axes = map(lambda axis: axis if axis >=0 else arr.ndim+axis, axes)
+    axes = [axis if axis >=0 else arr.ndim+axis for axis in axes]
     for i, axis in enumerate(axes):
         for j, axis_after in enumerate(axes[i+1:]):
             if axis_after > axis:
@@ -228,8 +228,7 @@ def apply_along_axes(func, axes, arr, *args, **kwargs):
         return func(arr, *args, **kwargs)
     iter_shape = arr.shape[:-len(axes)]
     slice_shape = arr.shape[-len(axes):]
-    arr = numpy.array(map(lambda s: func(s, *args, **kwargs),
-                          arr.reshape((numpy.prod(iter_shape),)+slice_shape)))
+    arr = numpy.array([func(s, *args, **kwargs) for s in arr.reshape((numpy.prod(iter_shape),)+slice_shape)])
     return arr.reshape(iter_shape+arr.shape[-len(axes):]);
     
     

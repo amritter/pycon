@@ -177,5 +177,5 @@ def timeit(func, *args, **kwargs):
     t_s = time.clock()
     ret = func(*args, **kwargs)
     t_e = time.clock()
-    print 'Time needed: ' + str(t_e - t_s) + ' s'
+    print('Time needed: ' + str(t_e - t_s) + ' s')
     return ret

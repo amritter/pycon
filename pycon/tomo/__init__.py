@@ -14,7 +14,7 @@
     
     y = \\lambda\\cdot\\cos(\\theta) - \\xi\\cdot\sin(\\theta)
 '''
-import fbp
+from . import fbp
 import numpy
 import scipy.interpolate
 import skimage.restoration
