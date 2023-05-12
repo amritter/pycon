@@ -8,7 +8,7 @@
 import numpy
 import numpy.fft as fft
 import scipy.interpolate as sip
-import kernel
+from . import kernel
 
 def xi(x, y, theta):
     return x*numpy.cos(theta)-y*numpy.sin(theta)

@@ -30,15 +30,15 @@ def show_doc_html(refresh=False):
         cwd_old = os.getcwd()
         os.chdir(os.path.join(package_root, '../doc'))
         if subprocess.call(['make', 'html']) == 0:
-            print 'Html documentation refreshed.'
+            print('Html documentation refreshed.')
         else:
             print ('Could not refresh html documentation. Maybe sphinx-doc is '
                    'not installed on this system.')
         os.chdir(cwd_old)
     # Try showing documentation.
     if os.path.exists(html_index):
-        print 'Showing sphinx html documentation at: '+html_index
+        print('Showing sphinx html documentation at: '+html_index)
         webbrowser.open('file://'+html_index)
     else:
-        print 'Could not find html documentation index at: '+html_index
+        print('Could not find html documentation index at: '+html_index)
     
