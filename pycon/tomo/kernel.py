@@ -5,7 +5,7 @@
 # Copyright (C)
 # 2012-2014 André Ritter (andre.ritter@fau.de)
 
-from numpy import arange, abs, sign, roll, frompyfunc
+from numpy import arange, abs, sign, roll, frompyfunc, sin, cos, pi, nan_to_num
 
 rect = frompyfunc(lambda x, c: float(abs(x)<c), 2, 1)
 
@@ -24,6 +24,15 @@ def hilbert(n,c):
 def ramp(n,c):
     ks = freqs(n)
     return abs(ks)*rect(ks, c)
+
+def shepp_logan(n,c):
+    ks = freqs(n)
+    return ramp(n,c)*nan_to_num(sin(ks*pi*0.5/c)/(ks*pi*0.5/c), nan=1)
+
+def cosine(n,c):
+    ks = freqs(n)
+    return abs(ks)*cos(ks*pi*0.5/c)
+
 
 def rramp(n,c):
     ks = rfreqs((n/2)+1)

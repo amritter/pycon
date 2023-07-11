@@ -32,6 +32,12 @@ def unpad(arr, pads=0, axis=None):
 def ramp(c=1.):
     return lambda n: kernel.ramp(n, c)
 
+def shepp_logan(c=1.):
+    return lambda n: kernel.shepp_logan(n, c)
+
+def cosine(c=1.):
+    return lambda n: kernel.cos(n, c)
+
 def hilbert(c=1.):
     return lambda n: kernel.hilbert(n, c)
 
