@@ -149,7 +149,7 @@ def deref(arr, ref, deref_mean=None, deref_phase=None,
                         deref_phase(phase(arr), phase(ref)),
                         deref_visibility(visibility(arr), visibility(ref))])
 
-def reco_fft(arr, order=1, axis=0):
+def reco_fft(arr, order=1, axis=0, mean_limit=1e-9):
     '''
     Reconstruct mean, phase and visibility from phase sampling data.
     
@@ -168,4 +168,4 @@ def reco_fft(arr, order=1, axis=0):
     norm = 1. / arr.shape[axis]
     return numpy.array([numpy.abs(ft[0] * norm),
                         numpy.angle(ft[order]),
-                        abs(2.*ft[order] / ft[0])])
+                        abs(2.*ft[order] / numpy.maximum(mean_limit, ft[0]))])
